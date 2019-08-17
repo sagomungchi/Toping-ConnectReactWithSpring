@@ -3,6 +3,8 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**
 !**/src/test/**
+*.swp
+*.swo
 
 ### STS ###
 .apt_generated
@@ -30,4 +32,18 @@ build/
 ### VS Code ###
 .vscode/
 
-
+### React & Node.js ###
+node_modules
+scripts/flow/*/.flowconfig
+.grunt
+_SpecRunner.html
+__benchmarks__
+build/
+remote-repo/
+coverage/
+.module-cache
+fixtures/dom/public/react-dom.js
+fixtures/dom/public/react.js
+test/the-files-to-test.generated.js
+*.log*
+chrome-user-data
