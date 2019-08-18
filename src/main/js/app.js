@@ -16,7 +16,8 @@ class App extends React.Component {
 
     constructor(props) {
         super(props);
-        this.state = {users: [], attributes: [], pageSize: 2, links: {}};
+        this.state = {users: [], attributes: [], page: 1, pageSize: 2, links: {}
+        , loggedInManager: this.props.loggedInManager};
         this.updatePageSize = this.updatePageSize.bind(this);
         this.onCreate = this.onCreate.bind(this);
         this.onDelete = this.onDelete.bind(this);
@@ -35,11 +36,26 @@ class App extends React.Component {
                 path: userCollection.entity._links.profile.href,
                 headers: {'Accept': 'application/schema+json'}
             }).then(schema => {
+                /**
+                 * Filter unneeded JSON Schema properties, like uri references and
+                 * subtypes ($ref).
+                 */
+                Object.keys(schema.entity.properties).forEach(function (property) {
+                    if (schema.entity.properties[property].hasOwnProperty('format') &&
+                        schema.entity.properties[property].format === 'uri') {
+                        delete schema.entity.properties[property];
+                    }
+                    else if (schema.entity.properties[property].hasOwnProperty('$ref')) {
+                        delete schema.entity.properties[property];
+                    }
+                });
+
                 this.schema = schema.entity;
                 this.links = userCollection.entity._links;
                 return userCollection;
             });
         }).then(userCollection => {
+            this.page = userCollection.entity.page;
             return userCollection.entity._embedded.users.map(user =>
                 client({
                     method: 'GET',
@@ -50,6 +66,7 @@ class App extends React.Component {
             return when.all(userPromises);
         }).done(users => {
             this.setState({
+                page: this.page,
                 users: users,
                 attributes: Object.keys(this.schema.properties),
                 pageSize: pageSize,
@@ -70,28 +87,39 @@ class App extends React.Component {
     }
 
     onUpdate(user, updateUser){
-        client({
-            method: 'PUT',
-            path: user.entity._links.self.href,
-            entity: updateUser,
-            headers:{
-                'Content-Type': 'application/json',
-                'If-Match': user.headers.Etag
-            }
-        }).done(response => {
-            this.loadFromServer(this.state.package);
-        }, response => {
-            if(response.status.code === 412){
-                alert('DENIED: Unable to update' +
-                       user.entity._links.self.href + '. Your copy is stale.');
-            }
-        })
+        if(user.entity.manager.name === this.state.loggedInManager){
+            updateUser["manager"] = user.entity.manager;
+            client({
+                method: 'PUT',
+                path: user.entity._links.self.href,
+                entity: updateUser,
+                headers:{
+                    'Content-Type': 'application/json',
+                    'If-Match': user.headers.Etag
+                }
+            }).done(response => {
+                /* Let the websocket handler update the state */
+            }, response => {
+                if (response.status.code === 403){
+                    alert('ACCESS DENIED: 수정 권한이 없습니다.' + user.entity._links.self.href);
+                }
+                if (response.status.code === 412){
+                    alert('DENIED: 수정이 불가능합니다.' + user.entity._links.self.href);
+                }
+            });
+        } else {
+            alert("수정 권한을 갖고 계시지 않습니다.")
+        }
     }
 
     onDelete(user){
-        client({method:'DELETE', path: user._links.self.href}).done(response =>{
-            this.loadFromServer(this.state.pageSize);
-        })
+        client({method:'DELETE', path: user._links.self.href}
+        ).done(response =>{/* let the websocket handle updating the UI */},
+        response => {
+            if (response.status.code === 403){
+                alert('ACCESS DENIED : 삭제 권한을 갖고 있지 않습니다.' + user.entity._links.self.href);
+            }
+        });
     }
 
     onNavigate(navUri){
@@ -100,6 +128,7 @@ class App extends React.Component {
             path: navUri
         }).then(userCollection => {
             this.links = userCollection.entity._links;
+            this.page  = userCollection.entity.page;
 
             return userCollection.entity._embedded.users.map(user =>
                 client({
@@ -111,6 +140,7 @@ class App extends React.Component {
             return when.all(userPromises);
         }).done(users => {
             this.setState({
+                page: this.page,
                 users: users,
                 attributes: Object.key(this.schema.properties),
                 pageSize: this.state.pageSize,
@@ -188,7 +218,8 @@ class App extends React.Component {
                               onNavigate={this.onNavigate}
                               onUpdate={this.onUpdate}
                               onDelete={this.onDelete}
-                              updatePageSize={this.updatePageSize}/>
+                              updatePageSize={this.updatePageSize}
+                              loggedInManager={this.state.loggedInManager}/>
             </div>
         )
     }
@@ -221,23 +252,33 @@ class UpdateDialog extends React.Component{
 
         const dialogId = "updateUser-" + this.props.user.entity._links.self.href;
 
-        return(
-            <div key={this.props.user.entity._links.self.href}>
-                <a href={"#" + dialogId}>Update</a>
-                <div id={dialogId} className="modalDialog">
-                    <div>
-                        <a href="#" title="Close" className="close">X</a>
-                        <h2>Update an User</h2>
-                        <form>
-                            {inputs}
-                            <button onClick={this.handleSubmit}>Update</button>
-                        </form>
+        const isManagerCorrect = this.props.user.entity.manager.name == this.props.loggedInManager;
+
+        if (isManagerCorrect === false){
+            return (
+                <div>
+                    <a>접근 권한이 없습니다.</a>
+                </div>
+            )
+        } else {
+            return(
+                <div>
+                    <a href={"#" + dialogId}>Update</a>
+                    <div id={dialogId} className="modalDialog">
+                        <div>
+                            <a href="#" title="Close" className="close">X</a>
+                            <h2>Update an User</h2>
+                            <form>
+                                {inputs}
+                                <button onClick={this.handleSubmit}>Update</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
-        )
+            )
+        }
     }
-};
+}
 
 
 class CreateDialog extends React.Component{
@@ -330,12 +371,16 @@ class UserList extends React.Component{
     }
 
     render() {
+        const pageInfo = this.props.hasOwnProperty("number") ?
+            <h3>User - Page {this.props.page.number + 1} of {this.props.page.totalPages}</h3> : null;
+
         const users = this.props.users.map(user =>
             <User key={user.entity._links.self.href}
                   user={user}
                   attributes={this.props.attributes}
                   onUpdate={this.props.onUpdate}
-                  onDelete={this.props.onDelete}/>
+                  onDelete={this.props.onDelete}
+                  loggedInManager={this.props.loggedInManager}/>
         );
 
         const navLinks = [];
@@ -361,6 +406,8 @@ class UserList extends React.Component{
                         <th>사용자 명</th>
                         <th>팀 명</th>
                         <th>핸드폰 번호</th>
+                        <th></th>
+                        <th></th>
                     </tr>
                     {users}
                     </tbody>
@@ -390,10 +437,12 @@ class User extends React.Component{
                 <td>{this.props.user.entity.userName}</td>
                 <td>{this.props.user.entity.teamName}</td>
                 <td>{this.props.user.entity.phoneNum}</td>
+                <td>{this.props.user.entity.manager.name}</td>
                 <td>
                     <UpdateDialog user={this.props.user}
                                   attributes={this.props.attributes}
-                                  onUpdate={this.props.onUpdate}/>
+                                  onUpdate={this.props.onUpdate}
+                                  loggedInManager={this.props.loggedInManager}/>
                 </td>
                 <td>
                     <button onClick={this.handleDelete}>Delete</button>
@@ -403,7 +452,13 @@ class User extends React.Component{
     }
 }
 
+</tr>
+)
+}
+}
+
 ReactDOM.render(
-    <App />,
+ReactDOM.render(
+    <App loggedInManager={document.getElementById('managername').innerHTML} />,
     document.getElementById('react')
 )
