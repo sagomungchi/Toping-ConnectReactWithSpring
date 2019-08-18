@@ -71,7 +71,7 @@ class App extends React.Component {
 
     onNavigate(navUri){
         client({method: 'GET', path: navUri}).done(userCollection => {
-            this.state({
+            this.setState({
                 users: userCollection.entity._embedded.users,
                 attributes: this.state.attributes,
                 pageSize: this.state.pageSize,

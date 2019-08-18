@@ -34896,7 +34896,7 @@ function (_React$Component) {
         method: 'GET',
         path: navUri
       }).done(function (userCollection) {
-        _this5.state({
+        _this5.setState({
           users: userCollection.entity._embedded.users,
           attributes: _this5.state.attributes,
           pageSize: _this5.state.pageSize,

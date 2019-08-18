@@ -18,6 +18,12 @@ public class UserService implements CommandLineRunner {
 
     @Override
     public void run(String... strings) throws Exception {
-        this.repository.save(new User("신수웅", "사고뭉치", "010-5588-3944"));
+        //this.repository.save(new User("신수웅", "사고뭉치", "010-5588-3944"));
+        this.repository.save(new User("Frodo", "Baggins", "ring bearer"));
+        this.repository.save(new User("Bilbo", "Baggins", "burglar"));
+        this.repository.save(new User("Gandalf", "the Grey", "wizard"));
+        this.repository.save(new User("Samwise", "Gamgee", "gardener"));
+        this.repository.save(new User("Meriadoc", "Brandybuck", "pony rider"));
+        this.repository.save(new User("Peregrin", "Took", "pipe smoker"));
     }
 }
