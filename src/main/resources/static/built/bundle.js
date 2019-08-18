@@ -34761,6 +34761,9 @@ var __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (r
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
+"use strict";
+
+
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -34771,9 +34774,9 @@ function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _d
 
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
 
-function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
-
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
@@ -34784,6 +34787,10 @@ var React = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 var ReactDOM = __webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js");
 
 var client = __webpack_require__(/*! ./client */ "./src/main/js/client.js");
+
+var follow = __webpack_require__(/*! ./follow */ "./src/main/js/follow.js");
+
+var root = '/api';
 
 var App =
 /*#__PURE__*/
@@ -34797,58 +34804,304 @@ function (_React$Component) {
 
     _this = _possibleConstructorReturn(this, _getPrototypeOf(App).call(this, props));
     _this.state = {
-      users: []
+      users: [],
+      attributes: [],
+      pageSize: 2,
+      links: {}
     };
+    _this.updatePageSize = _this.updatePageSize.bind(_assertThisInitialized(_this));
+    _this.onCreate = _this.onCreate.bind(_assertThisInitialized(_this));
+    _this.onDelete = _this.onDelete.bind(_assertThisInitialized(_this));
+    _this.onNavigate = _this.onNavigate.bind(_assertThisInitialized(_this));
     return _this;
   }
 
   _createClass(App, [{
-    key: "componentDidMount",
-    value: function componentDidMount() {
+    key: "loadFromServer",
+    value: function loadFromServer(pageSize) {
       var _this2 = this;
 
-      client({
-        method: 'GET',
-        path: '/api/users'
-      }).done(function (response) {
+      follow(client, root, [{
+        rel: 'users',
+        params: {
+          size: pageSize
+        }
+      }]).then(function (userCollection) {
+        return client({
+          method: 'GET',
+          path: userCollection.entity._links.profile.href,
+          headers: {
+            'Accept': 'application/schema+json'
+          }
+        }).then(function (schema) {
+          _this2.schema = schema.entity;
+          return userCollection;
+        });
+      }).done(function (userCollection) {
         _this2.setState({
-          users: response.entity._embedded.users
+          users: userCollection.entity._embedded.users,
+          attributes: Object.keys(_this2.schema.properties),
+          pageSize: pageSize,
+          links: userCollection.entity._links
         });
       });
     }
   }, {
+    key: "onCreate",
+    value: function onCreate(newUser) {
+      var _this3 = this;
+
+      follow(client, root, ['users']).then(function (userCollection) {
+        return client({
+          method: 'POST',
+          path: userCollection.entity._links.self.href,
+          entity: newUser,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }).then(function (response) {
+        return follow(client, root, [{
+          rel: 'users',
+          params: {
+            'size': _this3.state.pageSize
+          }
+        }]);
+      }).done(function (response) {
+        if (typeof response.entity._links.last !== "undefined") {
+          _this3.onNavigate(response.entity._links.last.href);
+        } else {
+          _this3.onNavigate(response.entity._links.self.href);
+        }
+      });
+    }
+  }, {
+    key: "onDelete",
+    value: function onDelete(user) {
+      var _this4 = this;
+
+      client({
+        method: 'DELETE',
+        path: user._links.self.href
+      }).done(function (response) {
+        _this4.loadFromServer(_this4.state.pageSize);
+      });
+    }
+  }, {
+    key: "onNavigate",
+    value: function onNavigate(navUri) {
+      var _this5 = this;
+
+      client({
+        method: 'GET',
+        path: navUri
+      }).done(function (userCollection) {
+        _this5.state({
+          users: userCollection.entity._embedded.users,
+          attributes: _this5.state.attributes,
+          pageSize: _this5.state.pageSize,
+          links: userCollection.entity._links
+        });
+      });
+    }
+  }, {
+    key: "updatePageSize",
+    value: function updatePageSize(pageSize) {
+      if (pageSize !== this.state.pageSize) {
+        this.loadFromServer(pageSize);
+      }
+    }
+  }, {
+    key: "componentDidMount",
+    value: function componentDidMount() {
+      this.loadFromServer(this.state.pageSize);
+    }
+  }, {
     key: "render",
     value: function render() {
-      return React.createElement(UserList, {
-        users: this.state.users
-      });
+      return React.createElement("div", null, React.createElement(CreateDialog, {
+        attributes: this.state.attributes,
+        onCreate: this.onCreate
+      }), React.createElement(UserList, {
+        users: this.state.users,
+        links: this.state.links,
+        pageSize: this.state.pageSize,
+        onNavigate: this.onNavigate,
+        onDelete: this.onDelete,
+        updatePageSize: this.updatePageSize
+      }));
     }
   }]);
 
   return App;
 }(React.Component);
 
-var UserList =
+var CreateDialog =
 /*#__PURE__*/
 function (_React$Component2) {
-  _inherits(UserList, _React$Component2);
+  _inherits(CreateDialog, _React$Component2);
 
-  function UserList() {
+  function CreateDialog(props) {
+    var _this6;
+
+    _classCallCheck(this, CreateDialog);
+
+    _this6 = _possibleConstructorReturn(this, _getPrototypeOf(CreateDialog).call(this, props));
+    _this6.handleSubmit = _this6.handleSubmit.bind(_assertThisInitialized(_this6));
+    return _this6;
+  }
+
+  _createClass(CreateDialog, [{
+    key: "handleSubmit",
+    value: function handleSubmit(e) {
+      var _this7 = this;
+
+      e.preventDefault();
+      var newUser = {};
+      this.props.attributes.forEach(function (attribute) {
+        newUser[attribute] = ReactDOM.findDOMNode(_this7.refs[attribute]).value.trim();
+      });
+      this.props.onCreate(newUser); // clear out the dialog's input
+
+      this.props.attributes.forEach(function (attribute) {
+        ReactDOM.findDOMNode(_this7.refs[attribute]).value = '';
+      }); // Navigate away from the dialog to hide it
+
+      window.location = "#";
+    }
+  }, {
+    key: "render",
+    value: function render() {
+      var inputs = this.props.attributes.map(function (attribute) {
+        return React.createElement("p", {
+          key: attribute
+        }, React.createElement("input", {
+          type: "text",
+          placeholder: attribute,
+          ref: attribute,
+          className: "field"
+        }));
+      });
+      return React.createElement("div", null, React.createElement("a", {
+        href: "#createUser"
+      }, "Create"), React.createElement("div", {
+        id: "createUser",
+        className: "modalDialog"
+      }, React.createElement("div", null, React.createElement("a", {
+        href: "#",
+        title: "Close",
+        className: "close"
+      }, "X"), React.createElement("h2", null, "Create new User"), React.createElement("form", null, inputs, React.createElement("button", {
+        onClick: this.handleSubmit
+      }, "Create")))));
+    }
+  }]);
+
+  return CreateDialog;
+}(React.Component);
+
+var UserList =
+/*#__PURE__*/
+function (_React$Component3) {
+  _inherits(UserList, _React$Component3);
+
+  function UserList(props) {
+    var _this8;
+
     _classCallCheck(this, UserList);
 
-    return _possibleConstructorReturn(this, _getPrototypeOf(UserList).apply(this, arguments));
+    _this8 = _possibleConstructorReturn(this, _getPrototypeOf(UserList).call(this, props));
+    _this8.handleNavFirst = _this8.handleNavFirst.bind(_assertThisInitialized(_this8));
+    _this8.handleNavPrev = _this8.handleNavPrev.bind(_assertThisInitialized(_this8));
+    _this8.handleNavNext = _this8.handleNavNext.bind(_assertThisInitialized(_this8));
+    _this8.handleNavLast = _this8.handleNavLast.bind(_assertThisInitialized(_this8));
+    _this8.handleInput = _this8.handleInput.bind(_assertThisInitialized(_this8));
+    return _this8;
   }
 
   _createClass(UserList, [{
+    key: "handleInput",
+    value: function handleInput(e) {
+      e.preventDefault();
+      var pageSize = ReactDOM.findDOMNode(this.refs.pageSize).value;
+
+      if (/^[0-9]+$/.test(pageSize)) {
+        this.props.updatePageSize(pageSize);
+      } else {
+        ReactDOM.findDOMNode(this.refs.pageSize).value = pageSize.substring(0, pageSize.length - 1);
+      }
+    }
+  }, {
+    key: "handleNavFirst",
+    value: function handleNavFirst(e) {
+      e.preventDefault();
+      this.props.onNavigate(this.props.links.first.href);
+    }
+  }, {
+    key: "handleNavPrev",
+    value: function handleNavPrev(e) {
+      e.preventDefault();
+      this.props.onNavigate(this.props.links.prev.href);
+    }
+  }, {
+    key: "handleNavNext",
+    value: function handleNavNext(e) {
+      e.preventDefault();
+      this.props.onNavigate(this.props.links.next.href);
+    }
+  }, {
+    key: "handleNavLast",
+    value: function handleNavLast(e) {
+      e.preventDefault();
+      this.props.onNavigate(this.props.links.last.href);
+    }
+  }, {
     key: "render",
     value: function render() {
+      var _this9 = this;
+
       var users = this.props.users.map(function (user) {
         return React.createElement(User, {
           key: user._links.self.href,
-          user: user
+          user: user,
+          onDelete: _this9.props.onDelete
         });
       });
-      return React.createElement("table", null, React.createElement("tbody", null, React.createElement("tr", null, React.createElement("th", null, "First Name"), React.createElement("th", null, "Last Name"), React.createElement("th", null, "Description")), users));
+      var navLinks = [];
+
+      if ("first" in this.props.links) {
+        navLinks.push(React.createElement("button", {
+          key: "first",
+          onClick: this.handleNavFirst
+        }, "<<"));
+      }
+
+      if ("prev" in this.props.links) {
+        navLinks.push(React.createElement("button", {
+          key: "prev",
+          onClick: this.handleNavPrev
+        }, "<"));
+      }
+
+      if ("next" in this.props.links) {
+        navLinks.push(React.createElement("button", {
+          key: "next",
+          onClick: this.handleNavNext
+        }, ">"));
+      }
+
+      if ("last" in this.props.links) {
+        navLinks.push(React.createElement("button", {
+          key: "last",
+          onClick: this.handleNavLast
+        }, ">>"));
+      }
+
+      return React.createElement("div", null, React.createElement("table", null, React.createElement("input", {
+        ref: "pageSize",
+        defaultValue: this.props.pageSize,
+        onInput: this.handleInput
+      }), React.createElement("tbody", null, React.createElement("tr", null, React.createElement("th", null, "\uC0AC\uC6A9\uC790 \uBA85"), React.createElement("th", null, "\uD300 \uBA85"), React.createElement("th", null, "\uD578\uB4DC\uD3F0 \uBC88\uD638")), users)), React.createElement("div", null, navLinks));
     }
   }]);
 
@@ -34857,19 +35110,30 @@ function (_React$Component2) {
 
 var User =
 /*#__PURE__*/
-function (_React$Component3) {
-  _inherits(User, _React$Component3);
+function (_React$Component4) {
+  _inherits(User, _React$Component4);
 
-  function User() {
+  function User(props) {
+    var _this10;
+
     _classCallCheck(this, User);
 
-    return _possibleConstructorReturn(this, _getPrototypeOf(User).apply(this, arguments));
+    _this10 = _possibleConstructorReturn(this, _getPrototypeOf(User).call(this, props));
+    _this10.handleDelete = _this10.handleDelete.bind(_assertThisInitialized(_this10));
+    return _this10;
   }
 
   _createClass(User, [{
+    key: "handleDelete",
+    value: function handleDelete() {
+      this.props.onDelete(this.props.user);
+    }
+  }, {
     key: "render",
     value: function render() {
-      return React.createElement("tr", null, React.createElement("td", null, this.props.user.userName), React.createElement("td", null, this.props.user.teamName), React.createElement("td", null, this.props.user.phoneNum));
+      return React.createElement("tr", null, React.createElement("td", null, this.props.user.userName), React.createElement("td", null, this.props.user.teamName), React.createElement("td", null, this.props.user.phoneNum), React.createElement("td", null, React.createElement("button", {
+        onClick: this.handleDelete
+      }, "Delete")));
     }
   }]);
 
@@ -34912,6 +35176,55 @@ module.exports = rest.wrap(mime, {
     'Accept': 'application/hal+json'
   }
 });
+
+/***/ }),
+
+/***/ "./src/main/js/follow.js":
+/*!*******************************!*\
+  !*** ./src/main/js/follow.js ***!
+  \*******************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+module.exports = function follow(api, rootPath, relArray) {
+  var root = api({
+    method: 'GET',
+    path: rootPath
+  });
+  return relArray.reduce(function (root, arrayItem) {
+    var rel = typeof arrayItem === 'string' ? arrayItem : arrayItem.rel;
+    return traverseNext(root, rel, arrayItem);
+  }, root);
+
+  function traverseNext(root, rel, arrayItem) {
+    return root.then(function (response) {
+      if (hasEmbeddedRel(response.entity, rel)) {
+        return response.entity._embedded[rel];
+      }
+
+      if (!response.entity._links) {
+        return [];
+      }
+
+      if (typeof arrayItem === 'string') {
+        return api({
+          method: 'GET',
+          path: response.entity._links[rel].href
+        });
+      } else {
+        return api({
+          method: 'GET',
+          path: response.entity._links[rel].href,
+          params: arrayItem.params
+        });
+      }
+    });
+  }
+
+  function hasEmbeddedRel(entity, rel) {
+    return entity._embedded && entity._embedded.hasOwnProperty(rel);
+  }
+};
 
 /***/ }),
 
