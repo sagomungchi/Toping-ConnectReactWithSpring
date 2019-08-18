@@ -20,14 +20,18 @@ public class User {
 
     @Version
     @JsonIgnore
-    Long version;
+    private Long version;
+
+    @ManyToOne
+    private Manager manager;
 
     private User() {}
 
-    public User(String userName, String teamName, String phoneNum){
+    public User(String userName, String teamName, String phoneNum, Manager manager){
         this.userName = userName;
         this.teamName = teamName;
         this.phoneNum = phoneNum;
+        this.manager  = manager;
     }
 
     @Override
@@ -39,12 +43,13 @@ public class User {
                 Objects.equals(userName, user.userName) &&
                 Objects.equals(teamName, user.teamName) &&
                 Objects.equals(phoneNum, user.phoneNum) &&
-                Objects.equals(version, user.version);
+                Objects.equals(version, user.version) &&
+                Objects.equals(manager, user.manager);
     }
 
     @Override
     public int hashCode(){
-        return Objects.hash(id, userName, teamName, phoneNum);
+        return Objects.hash(id, userName, teamName, phoneNum, version, manager);
     }
 
     public Long getId() {
@@ -87,6 +92,14 @@ public class User {
         this.version = version;
     }
 
+    public Manager getManager() {
+        return manager;
+    }
+
+    public void setManager(Manager manager) {
+        this.manager = manager;
+    }
+
     @Override
     public String toString() {
         return "User{" +
@@ -95,6 +108,7 @@ public class User {
                 ", teamName='" + teamName + '\'' +
                 ", phoneNum='" + phoneNum + '\'' +
                 ", version=" + version +
+                ", manager=" + manager +
                 '}';
     }
 }

@@ -1,4 +1,4 @@
-package it.toping.u300demo.repository;
+package it.toping.u300demo.handler;
 
 import it.toping.u300demo.domain.User;
 import org.springframework.beans.factory.annotation.Autowired;
