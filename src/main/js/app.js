@@ -107,7 +107,7 @@ class App extends React.Component {
         }).then(userCollection => {
             this.links = userCollection.entity._links;
 
-            return userCollection.entity.embedded.users.map(user =>
+            return userCollection.entity._embedded.users.map(user =>
                 client({
                     method: 'GET',
                     path: user._links.self.href
@@ -274,17 +274,14 @@ class UserList extends React.Component{
         e.preventDefault();
         this.props.onNavigate(this.props.links.first.href);
     }
-
     handleNavPrev(e) {
         e.preventDefault();
         this.props.onNavigate(this.props.links.prev.href);
     }
-
     handleNavNext(e) {
         e.preventDefault();
         this.props.onNavigate(this.props.links.next.href);
     }
-
     handleNavLast(e) {
         e.preventDefault();
         this.props.onNavigate(this.props.links.last.href);
@@ -348,9 +345,9 @@ class User extends React.Component{
     render() {
         return (
             <tr>
-                <td>{this.props.user.userName}</td>
-                <td>{this.props.user.teamName}</td>
-                <td>{this.props.user.phoneNum}</td>
+                <td>{this.props.user.entity.userName}</td>
+                <td>{this.props.user.entity.teamName}</td>
+                <td>{this.props.user.entity.phoneNum}</td>
                 <td>
                     <UpdateDialog user={this.props.user}
                                   attributes={this.props.attributes}

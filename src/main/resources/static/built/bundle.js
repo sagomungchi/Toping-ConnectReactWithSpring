@@ -34931,7 +34931,7 @@ function (_React$Component) {
         path: navUri
       }).then(function (userCollection) {
         _this6.links = userCollection.entity._links;
-        return userCollection.entity.embedded.users.map(function (user) {
+        return userCollection.entity._embedded.users.map(function (user) {
           return client({
             method: 'GET',
             path: user._links.self.href
@@ -35246,7 +35246,7 @@ function (_React$Component5) {
   }, {
     key: "render",
     value: function render() {
-      return React.createElement("tr", null, React.createElement("td", null, this.props.user.userName), React.createElement("td", null, this.props.user.teamName), React.createElement("td", null, this.props.user.phoneNum), React.createElement("td", null, React.createElement(UpdateDialog, {
+      return React.createElement("tr", null, React.createElement("td", null, this.props.user.entity.userName), React.createElement("td", null, this.props.user.entity.teamName), React.createElement("td", null, this.props.user.entity.phoneNum), React.createElement("td", null, React.createElement(UpdateDialog, {
         user: this.props.user,
         attributes: this.props.attributes,
         onUpdate: this.props.onUpdate
