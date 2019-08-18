@@ -1,11 +1,9 @@
 package it.toping.u300demo.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import javax.persistence.*;
 import java.util.Objects;
 
 @Entity
@@ -19,6 +17,10 @@ public class User {
     private String userName;
     private String teamName;
     private String phoneNum;
+
+    @Version
+    @JsonIgnore
+    Long version;
 
     private User() {}
 
@@ -36,7 +38,8 @@ public class User {
         return Objects.equals(id, user.id) &&
                 Objects.equals(userName, user.userName) &&
                 Objects.equals(teamName, user.teamName) &&
-                Objects.equals(phoneNum, user.phoneNum);
+                Objects.equals(phoneNum, user.phoneNum) &&
+                Objects.equals(version, user.version);
     }
 
     @Override
@@ -76,6 +79,14 @@ public class User {
         this.phoneNum = phoneNum;
     }
 
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
     @Override
     public String toString() {
         return "User{" +
@@ -83,6 +94,7 @@ public class User {
                 ", userName='" + userName + '\'' +
                 ", teamName='" + teamName + '\'' +
                 ", phoneNum='" + phoneNum + '\'' +
+                ", version=" + version +
                 '}';
     }
 }
