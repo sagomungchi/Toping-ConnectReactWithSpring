@@ -7,6 +7,8 @@ const when = require('when');
 
 const follow = require('./follow');
 
+const stompClient = require('./websocket-listener');
+
 const root = '/api';
 
 
@@ -20,6 +22,8 @@ class App extends React.Component {
         this.onDelete = this.onDelete.bind(this);
         this.onUpdate = this.onUpdate.bind(this);
         this.onNavigate = this.onNavigate.bind(this);
+        this.refreshCurrentPage = this.refreshCurrentPage.bind(this);
+        this.refreshAndGoToLastPage = this.refreshAndGoToLastPage.bind(this);
     }
 
     loadFromServer(pageSize) {
@@ -55,24 +59,14 @@ class App extends React.Component {
     }
 
     onCreate(newUser){
-        follow(client, root, ['users']).then(userCollection => {
-            return client({
-                method: 'POST',
-                path: userCollection.entity._links.self.href,
-                entity: newUser,
-                headers: {'Content-Type' : 'application/json'}
-            })
-        }).then(response => {
-            return follow(client, root, [
-                {rel:'users', params: {'size': this.state.pageSize}}
-            ]);
-        }).done(response => {
-            if(typeof response.entity._links.last !== "undefined") {
-                this.onNavigate(response.entity._links.last.href);
-            } else {
-                this.onNavigate(response.entity._links.self.href);
-            }
-        });
+        follow(client, root, ['users']).done(response => {
+                client({
+                        method: 'POST',
+                    path: response.entity._links.self.href,
+                    entity: newUser,
+                    headers: {'Content-Type' : 'application/json'}
+                })
+        })
     }
 
     onUpdate(user, updateUser){
@@ -131,8 +125,56 @@ class App extends React.Component {
         }
     }
 
+    refreshAndGoToLastPage(message){
+        follow(client, root, [{
+                rel: 'users',
+                param: {size: this.state.pageSize}
+        }]).done(response => {
+            if(response.entity._links.last !== undefined){
+                this.onNavigate(response.entity._links.last.href);
+            } else {
+                this.onNavigate(response.entity._links.self.href);
+            }
+        })
+    }
+
+    refreshCurrentPage(message){
+        follow(client, root, [{
+                rel: 'users',
+                params: {
+                        size: this.state.pageSize,
+                        page: this.state.page.number
+                }
+        }]).then(userCollection => {
+            this.links = userCollection.entity._links;
+            this.page  = userCollection.entity.page;
+
+            return userCollection.entity._embedded.users.map(user => {
+                return client({
+                        method: 'GET',
+                        path  : user._links.self.href
+                })
+            });
+        }).then(userPromises => {
+            return when.all(userPromises);
+        }).then(users => {
+            this.setState({
+                page: this.page,
+                users: users,
+                attributes: Object.keys(this.schema.properties),
+                pageSize: this.state.pageSize,
+                links: this.links
+            });
+        });
+    }
+
     componentDidMount() {
         this.loadFromServer(this.state.pageSize);
+        stompClient.register([
+            {route: '/topic/newUser', callback: this.refreshAndGoToLastPage},
+            {route: '/topic/updateUser', callback: this.refreshCurrentPage},
+            {route: '/topic/deleteUser', callback: this.refreshCurrentPage}
+        ])
     }
 
     render() {
